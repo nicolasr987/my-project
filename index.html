@@ -4,335 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Samsung Sales Cloud Manager</title>
-    <!-- Tailwind CSS para Estilização -->
+    
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React e ReactDOM -->
+    <link rel="stylesheet" href="style.css">
+    
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel para JSX no Navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons (Base Library) -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
-    </style>
 </head>
 <body class="bg-[#f8fafc]">
     <div id="root"></div>
 
-    <!-- Scripts Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Substitua pelo seu objeto de configuração real
+        const firebaseConfig = JSON.parse(__firebase_config); 
         const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'samsung-sales-pro';
-
-        window.FB_SDK = { auth, db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, signInAnonymously, signInWithCustomToken, onAuthStateChanged, appId };
+        
+        window.FB_SDK = { 
+            auth: getAuth(app), 
+            db: getFirestore(app), 
+            collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, 
+            signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'samsung-sales-pro'
+        };
     </script>
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-
-        // Componente de Ícone que funciona sempre no Navegador
-        const Icon = ({ name, size = 20, className = "" }) => {
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
-        };
-
-        const App = () => {
-            const [user, setUser] = useState(null);
-            const [records, setRecords] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [activeTab, setActiveTab] = useState('acompanhamento');
-            const [currentTime, setCurrentTime] = useState('');
-            const [formData, setFormData] = useState({
-                customerName: '', phone: '', sku: '', ticketNumber: '', url: '', reminderTime: '09:00', category: 'acompanhamento'
-            });
-
-            const { auth, db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, signInAnonymously, signInWithCustomToken, onAuthStateChanged, appId } = window.FB_SDK;
-
-            // Autenticação (Regra 3)
-            useEffect(() => {
-                const initAuth = async () => {
-                    try {
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
-                    } catch (err) { console.error("Erro Auth:", err); }
-                };
-                initAuth();
-                const unsubscribe = onAuthStateChanged(auth, setUser);
-                return () => unsubscribe();
-            }, []);
-
-            // Busca de Dados (Regra 1 e 2)
-            useEffect(() => {
-                if (!user) return;
-                const recordsRef = collection(db, 'artifacts', appId, 'public', 'data', 'records');
-                const unsubscribe = onSnapshot(query(recordsRef), (snapshot) => {
-                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    setRecords(data.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
-                    setLoading(false);
-                }, (error) => {
-                    console.error("Erro Firestore:", error);
-                    setLoading(false);
-                });
-                return () => unsubscribe();
-            }, [user]);
-
-            // Relógio do Sistema
-            useEffect(() => {
-                const timer = setInterval(() => {
-                    const now = new Date();
-                    setCurrentTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
-                }, 1000);
-                return () => clearInterval(timer);
-            }, []);
-
-            const filteredRecords = useMemo(() => records.filter(r => r.category === activeTab), [records, activeTab]);
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!user) return;
-                try {
-                    const recordsRef = collection(db, 'artifacts', appId, 'public', 'data', 'records');
-                    await addDoc(recordsRef, {
-                        ...formData,
-                        status: formData.category === 'venda' ? 'Concluído' : 'Pendente',
-                        createdAt: new Date().toISOString()
-                    });
-                    setFormData({ ...formData, customerName: '', phone: '', sku: '', ticketNumber: '', url: '' });
-                } catch (err) { console.error("Erro Save:", err); }
-            };
-
-            const deleteRecord = async (id) => {
-                try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'records', id)); } catch (e) {}
-            };
-
-            const moveToVendas = async (record) => {
-                try {
-                    const recordRef = doc(db, 'artifacts', appId, 'public', 'data', 'records', record.id);
-                    await updateDoc(recordRef, { category: 'venda', status: 'Concluído', soldAt: new Date().toISOString() });
-                } catch (e) {}
-            };
-
-            const exportCSV = () => {
-                const headers = "Categoria,Ticket,Cliente,WhatsApp,SKU,Status\n";
-                const content = filteredRecords.map(l => `${l.category},${l.ticketNumber},${l.customerName},${l.phone},${l.sku},${l.status}`).join("\n");
-                const blob = new Blob([headers + content], { type: 'text/csv' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `planilha_samsung_${activeTab}.csv`;
-                a.click();
-            };
-
-            if (loading || !user) {
-                return (
-                    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-[#034EA2]"></div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Sincronizando Nuvem Samsung...</p>
-                    </div>
-                );
-            }
-
-            return (
-                <div className="min-h-screen text-slate-900 p-4 md:p-8">
-                    <div className="max-w-7xl mx-auto">
-                        <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-                            <div className="flex items-center gap-4 text-left">
-                                <div className="bg-[#034EA2] p-3 rounded-2xl text-white">
-                                    <Icon name="database" size={24} />
-                                </div>
-                                <div>
-                                    <h1 className="text-2xl font-black uppercase tracking-tighter leading-none mb-1">Samsung Cloud Manager</h1>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Sistema Unificado de Planilhas</p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1">
-                                {[
-                                    { id: 'acompanhamento', label: 'Acompanhamento' },
-                                    { id: 'venda', label: 'Vendas' },
-                                    { id: 'estoque', label: 'Sem Stock' }
-                                ].map(tab => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${activeTab === tab.id ? 'bg-white text-[#034EA2] shadow-sm' : 'text-slate-400'}`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <button onClick={exportCSV} className="hidden md:flex items-center gap-2 bg-[#034EA2] text-white font-black px-6 py-3 rounded-2xl text-xs transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-100">
-                                <Icon name="download" size={16} /> Exportar {activeTab}
-                            </button>
-                        </header>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
-                            {/* Formulário de Registro */}
-                            <section className="lg:col-span-4">
-                                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 sticky top-8">
-                                    <h3 className="text-lg font-black mb-6 text-slate-800 uppercase flex items-center gap-2">
-                                        <Icon name="user-plus" size={20} className="text-[#034EA2]" /> Novo Registro
-                                    </h3>
-                                    <form onSubmit={handleSubmit} className="space-y-4">
-                                        <div className="space-y-1 text-left">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Planilha de Destino</label>
-                                            <select 
-                                                value={formData.category} 
-                                                onChange={e => setFormData({...formData, category: e.target.value})}
-                                                className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#034EA2] font-black text-slate-700 appearance-none"
-                                            >
-                                                <option value="acompanhamento">Acompanhamento (Lead)</option>
-                                                <option value="venda">Venda Realizada</option>
-                                                <option value="estoque">Produto Sem Stock</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="space-y-1 text-left">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nome do Cliente</label>
-                                            <input type="text" required value={formData.customerName} onChange={e => setFormData({...formData, customerName: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-[#034EA2] font-medium" placeholder="Nome Completo" />
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3 text-left">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">WhatsApp</label>
-                                                <input type="text" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium" placeholder="(00) 00000" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-bold text-[#034EA2] uppercase ml-1">Ticket #</label>
-                                                <input type="text" required value={formData.ticketNumber} onChange={e => setFormData({...formData, ticketNumber: e.target.value})} className="w-full p-3.5 bg-blue-50 border border-blue-100 rounded-2xl outline-none text-sm font-black text-blue-800" placeholder="0000" />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-3 text-left">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">SKU</label>
-                                                <input type="text" required value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-sm font-medium" placeholder="Ex: S24 Ultra" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-bold text-[#034EA2] uppercase ml-1">Lembrete</label>
-                                                <input type="time" required value={formData.reminderTime} onChange={e => setFormData({...formData, reminderTime: e.target.value})} className="w-full p-3.5 bg-blue-50 border border-blue-100 rounded-2xl outline-none font-black text-blue-800" />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1 text-left">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Link para Verificação</label>
-                                            <input type="url" value={formData.url} onChange={e => setFormData({...formData, url: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-xs" placeholder="URL da Loja Samsung" />
-                                        </div>
-
-                                        <button type="submit" className="w-full bg-[#034EA2] text-white font-black py-4 rounded-2xl shadow-xl transition-all uppercase text-sm mt-2 active:scale-95 shadow-blue-100">Gravar na Planilha</button>
-                                    </form>
-                                </div>
-                            </section>
-
-                            {/* Listagem de Planilha */}
-                            <section className="lg:col-span-8 space-y-4">
-                                {filteredRecords.length === 0 ? (
-                                    <div className="bg-white border-2 border-dashed border-slate-200 rounded-[3rem] p-24 text-center">
-                                        <Icon name="package" size={48} className="text-slate-200 mx-auto mb-4 opacity-50" />
-                                        <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">Nenhum registo nesta categoria.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {filteredRecords.map(record => (
-                                            <div key={record.id} className={`bg-white rounded-[2.5rem] p-7 shadow-sm border-2 transition-all border-white hover:border-blue-50 text-left`}>
-                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left">
-                                                    <div className="flex gap-5 items-center">
-                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${activeTab === 'venda' ? 'bg-green-100 text-green-600' : activeTab === 'estoque' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-700'}`}>
-                                                            {activeTab === 'venda' ? <Icon name="check-circle" size={24} /> : <Icon name="user" size={24} />}
-                                                        </div>
-                                                        <div className="text-left">
-                                                            <div className="flex items-center gap-3 mb-1">
-                                                                <h4 className="font-black text-slate-800 text-2xl tracking-tighter leading-none">{record.customerName}</h4>
-                                                                <span className="bg-slate-100 text-slate-600 text-[10px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 uppercase">
-                                                                    <Icon name="hash" size={10} /> {record.ticketNumber}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex gap-4 text-xs text-slate-400 font-bold uppercase tracking-tight">
-                                                                <span className="flex items-center gap-1.5"><Icon name="phone" size={12} /> {record.phone}</span>
-                                                                <span className="flex items-center gap-1.5"><Icon name="package" size={12} /> {record.sku}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {activeTab !== 'venda' && (
-                                                        <div className={`p-4 rounded-2xl border-2 flex flex-col items-center min-w-[110px] ${currentTime === record.reminderTime ? 'bg-amber-50 border-amber-500 animate-bounce' : 'bg-slate-50 border-slate-100'}`}>
-                                                            <div className="flex items-center gap-1.5 font-black">
-                                                                <Icon name="clock" size={16} className={currentTime === record.reminderTime ? 'text-amber-600' : 'text-slate-400'} />
-                                                                <span className={`text-xl ${currentTime === record.reminderTime ? 'text-amber-700' : 'text-slate-800'}`}>{record.reminderTime}</span>
-                                                            </div>
-                                                            <p className="text-[9px] font-black text-slate-400 uppercase mt-1">Lembrete</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="mt-6 pt-5 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
-                                                    <div className="flex gap-3">
-                                                        {record.url && (
-                                                            <a href={record.url} target="_blank" className="text-[#034EA2] text-[10px] font-black uppercase flex items-center gap-1.5 bg-blue-50 px-4 py-2.5 rounded-xl transition-all shadow-sm">
-                                                                Abrir Link <Icon name="external-link" size={14} />
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {activeTab !== 'venda' && (
-                                                            <button 
-                                                                onClick={() => moveToVendas(record)} 
-                                                                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase bg-green-600 text-white shadow-lg shadow-green-100 hover:bg-green-700 transition-all active:scale-95"
-                                                            >
-                                                                <Icon name="shopping-cart" size={14} /> Finalizar Venda
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => deleteRecord(record.id)} className="p-3 text-slate-200 hover:text-red-500 transition-colors">
-                                                            <Icon name="trash-2" size={20} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {currentTime === record.reminderTime && activeTab !== 'venda' && (
-                                                    <div className="mt-4 bg-amber-500 text-white p-4 rounded-2xl flex items-center gap-4 shadow-xl">
-                                                        <Icon name="alert-circle" size={24} className="animate-pulse" />
-                                                        <div className="text-left">
-                                                            <p className="text-xs font-black uppercase mb-1 leading-none">Atenção Promotor!</p>
-                                                            <p className="text-[10px] font-bold opacity-90">Hora de conferir o Ticket #{record.ticketNumber} para o cliente {record.customerName.split(' ')[0]}.</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </section>
-                        </div>
-                    </div>
-                    <footer className="mt-16 text-center text-slate-300 text-[9px] font-black uppercase tracking-[0.5em] pb-12">
-                        Samsung Sales Cloud • Multi-Sheet Ecosystem v4.6
-                    </footer>
-                </div>
-            );
-        };
-
-        const container = document.getElementById('root');
-        const root = ReactDOM.createRoot(container);
-        root.render(<App />);
-    </script>
+    <script type="text/babel" src="app.js"></script>
 </body>
 </html>
