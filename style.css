@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+body { 
+    font-family: 'Inter', sans-serif; 
+}
+
+/* Animação para alertas e loading */
+.animate-pulse-slow { 
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+}
+
+@keyframes pulse { 
+    0%, 100% { opacity: 1; } 
+    50% { opacity: .5; } 
+}
+
+/* Ajustes finos para inputs de data/hora no mobile */
+input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(18%) sepia(88%) saturate(3752%) hue-rotate(203deg) brightness(92%) contrast(101%);
+}
